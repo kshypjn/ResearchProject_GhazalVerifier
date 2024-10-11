@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Syllable and Stress Pattern Verifier</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        #loading {
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Syllable and Stress Pattern Verifier</h1>
+        <form id="verifierForm">
+            <label for="input">Enter a word or hemistitch:</label>
+            <input type="text" id="input" required>
+            <label for="syllables">Expected number of syllables:</label>
+            <input type="number" id="syllables" min="1" required>
+            <label for="stress">Expected stress pattern (e.g., 1010 for strong-weak-strong-weak):</label>
+            <input type="text" id="stress" required pattern="[01]+" title="Enter a pattern of 0s and 1s">
+            <button type="submit">Verify</button>
+        </form>
+        <div id="loading">Verifying...</div>
+        <div id="result"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+    <script>
+        const form = document.getElementById('verifierForm');
+        const resultDiv = document.getElementById('result');
+        const loadingDiv = document.getElementById('loading');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('input').value.trim();
+            const expectedSyllables = parseInt(document.getElementById('syllables').value);
+            const expectedStress = document.getElementById('stress').value;
+
+            resultDiv.innerHTML = '';
+            resultDiv.className = '';
+            loadingDiv.style.display = 'block';
+
+            try {
+                const response = await axios.post('/verify', {
+                    input: input,
+                    expectedSyllables: expectedSyllables,
+                    expectedStress: expectedStress
+                });
+
+                const { totalSyllables, fullStressPattern, details, syllablesCorrect, stressCorrect } = response.data;
+
+                loadingDiv.style.display = 'none';
+
+                let message = '';
+                if (syllablesCorrect) {
+                    message += `✅ Syllable count correct: ${totalSyllables}`;
+                } else {
+                    message += `❌ Syllable count incorrect: expected ${expectedSyllables}, got ${totalSyllables}`;
+                }
+
+                message += '<br>';
+
+                if (stressCorrect) {
+                    message += `✅ Stress pattern correct: ${fullStressPattern}`;
+                } else {
+                    message += `❌ Stress pattern incorrect: expected ${expectedStress}, got ${fullStressPattern}`;
+                }
+
+                message += '<br><br>Details:<br>' + details.map(d => `"${d.word}": ${d.syllables} syllable(s), stress: ${d.stress}`).join('<br>');
+
+                resultDiv.innerHTML = message;
+                resultDiv.className = syllablesCorrect && stressCorrect ? 'success' : 'error';
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                resultDiv.innerHTML = `Error: ${error.response?.data?.error || error.message}`;
+                resultDiv.className = 'error';
+            }
+        });
+    </script>
+</body>
+</html>
