@@ -25,7 +25,6 @@ def count_syllables_heuristic(word):
     return count
 
 def get_syllables_and_stress(word):
-    # Handle words with apostrophes
     if "'" in word:
         parts = word.split("'")
         total_syllables = 0
@@ -36,7 +35,6 @@ def get_syllables_and_stress(word):
             total_stress += stress
         return total_syllables, total_stress
 
-    # Try Datamuse API first for syllable count
     response = requests.get(f"https://api.datamuse.com/words?sp={word}&md=s")
     if response.status_code == 200:
         data = response.json()
@@ -47,7 +45,6 @@ def get_syllables_and_stress(word):
     else:
         syllables = None
     
-    # Use pronouncing library for stress pattern and as fallback for syllable count
     pronunciations = pronouncing.phones_for_word(word)
     if pronunciations:
         stresses = pronouncing.stresses(pronunciations[0])
@@ -59,7 +56,6 @@ def get_syllables_and_stress(word):
         if syllables is None:
             syllables = count_syllables_heuristic(word)
     
-    # If stress pattern is still None, use a default pattern based on syllable count
     if stress_pattern is None:
         stress_pattern = '10' * (syllables // 2) + ('1' if syllables % 2 else '')
     
@@ -71,33 +67,36 @@ def index():
 
 @app.route('/verify', methods=['POST'])
 def verify():
-    data = request.json
-    words = re.findall(r"\w+(?:'\w+)?|\S+", data['input'])  # This regex will keep words with apostrophes together
-    expected_syllables = data['expectedSyllables']
-    expected_stress = data['expectedStress']
+    try:
+        data = request.json
+        words = re.findall(r"\w+(?:'\w+)?|\S+", data['input'])
+        expected_syllables = data['expectedSyllables']
+        expected_stress = data['expectedStress']
 
-    total_syllables = 0
-    full_stress_pattern = ''
-    details = []
+        total_syllables = 0
+        full_stress_pattern = ''
+        details = []
 
-    for word in words:
-        syllables, stress_pattern = get_syllables_and_stress(word)
-        
-        total_syllables += syllables
-        full_stress_pattern += stress_pattern
-        details.append({
-            "word": word,
-            "syllables": syllables,
-            "stress": stress_pattern
+        for word in words:
+            syllables, stress_pattern = get_syllables_and_stress(word)
+            total_syllables += syllables
+            full_stress_pattern += stress_pattern
+            details.append({
+                "word": word,
+                "syllables": syllables,
+                "stress": stress_pattern
+            })
+
+        return jsonify({
+            "totalSyllables": total_syllables,
+            "fullStressPattern": full_stress_pattern,
+            "details": details,
+            "syllablesCorrect": total_syllables == expected_syllables,
+            "stressCorrect": full_stress_pattern == expected_stress
         })
 
-    return jsonify({
-        "totalSyllables": total_syllables,
-        "fullStressPattern": full_stress_pattern,
-        "details": details,
-        "syllablesCorrect": total_syllables == expected_syllables,
-        "stressCorrect": full_stress_pattern == expected_stress
-    })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -91,50 +91,51 @@
         const loadingDiv = document.getElementById('loading');
 
         form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const input = document.getElementById('input').value.trim();
-            const expectedSyllables = parseInt(document.getElementById('syllables').value);
-            const expectedStress = document.getElementById('stress').value;
+    e.preventDefault();
+    const input = document.getElementById('input').value.trim();
+    const expectedSyllables = parseInt(document.getElementById('syllables').value);
+    const expectedStress = document.getElementById('stress').value;
 
-            resultDiv.innerHTML = '';
-            resultDiv.className = '';
-            loadingDiv.style.display = 'block';
+    resultDiv.innerHTML = '';
+    resultDiv.className = '';
+    loadingDiv.style.display = 'block';
 
-            try {
-                const response = await axios.post('/verify', {
-                    input: input,
-                    expectedSyllables: expectedSyllables,
-                    expectedStress: expectedStress
-                });
+    try {
+        const response = await axios.post('/verify', {
+            input: input,
+            expectedSyllables: expectedSyllables,
+            expectedStress: expectedStress
+        });
 
-                const { totalSyllables, fullStressPattern, details, syllablesCorrect, stressCorrect } = response.data;
+        const { totalSyllables, fullStressPattern, details, syllablesCorrect, stressCorrect } = response.data;
 
-                loadingDiv.style.display = 'none';
+        loadingDiv.style.display = 'none';
 
-                let message = '';
-                if (syllablesCorrect) {
-                    message += `✅ Syllable count correct: ${totalSyllables}`;
-                } else {
-                    message += `❌ Syllable count incorrect: expected ${expectedSyllables}, got ${totalSyllables}`;
-                }
+        let message = '';
+        if (syllablesCorrect) {
+            message += `✅ Syllable count correct: ${totalSyllables}`;
+        } else {
+            message += `❌ Syllable count incorrect: expected ${expectedSyllables}, got ${totalSyllables}`;
+        }
 
-                message += '<br>';
+        message += '<br>';
 
-                if (stressCorrect) {
-                    message += `✅ Stress pattern correct: ${fullStressPattern}`;
-                } else {
-                    message += `❌ Stress pattern incorrect: expected ${expectedStress}, got ${fullStressPattern}`;
-                }
+        if (stressCorrect) {
+            message += `✅ Stress pattern correct: ${fullStressPattern}`;
+        } else {
+            message += `❌ Stress pattern incorrect: expected ${expectedStress}, got ${fullStressPattern}`;
+        }
 
-                message += '<br><br>Details:<br>' + details.map(d => `"${d.word}": ${d.syllables} syllable(s), stress: ${d.stress}`).join('<br>');
+        message += '<br><br>Details:<br>' + details.map(d => `"${d.word}": ${d.syllables} syllable(s), stress: ${d.stress}`).join('<br>');
 
-                resultDiv.innerHTML = message;
-                resultDiv.className = syllablesCorrect && stressCorrect ? 'success' : 'error';
-            } catch (error) {
-                loadingDiv.style.display = 'none';
-                resultDiv.innerHTML = `Error: ${error.response?.data?.error || error.message}`;
-                resultDiv.className = 'error';
-            }
+        resultDiv.innerHTML = message;
+        resultDiv.className = syllablesCorrect && stressCorrect ? 'success' : 'error';
+    } catch (error) {
+        loadingDiv.style.display = 'none';
+        const errorMessage = error.response?.data?.error || error.message;
+        resultDiv.innerHTML = `Error: ${errorMessage}`;
+        resultDiv.className = 'error';
+    }
         });
     </script>
 </body>
