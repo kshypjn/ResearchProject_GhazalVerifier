@@ -7,7 +7,6 @@ import re
 app = Flask(__name__)
 CORS(app)
 
-
 def count_syllables_heuristic(word):
     word = ''.join(c for c in word.lower() if c.isalnum())
     count = 0
@@ -24,7 +23,6 @@ def count_syllables_heuristic(word):
     if count == 0:
         count += 1
     return count
-
 
 def get_syllables_and_stress(word):
     word = ''.join(c for c in word if c.isalnum())
@@ -57,27 +55,27 @@ def get_syllables_and_stress(word):
         if syllables is None:
             syllables = count_syllables_heuristic(word)
 
-    if stress_pattern is None:
-        if syllables == 1:
-            stress_pattern = '0'
-        else:
-            stress_pattern = ''.join(['01'] * (syllables // 2) + ['1'] * (syllables % 2))
+    # Ensure that monosyllabic words have 0 stress
+    if syllables == 1:
+        stress_pattern = '0'
+    elif stress_pattern is None:
+        # Default pattern for multisyllabic words without pronunciation info
+        stress_pattern = ''.join(['01'] * (syllables // 2) + ['1'] * (syllables % 2))
 
     return syllables, stress_pattern
 
 
-def get_rhyming_words(word, n):
+def get_rhyming_words(word):
+    """Get rhyming words using the Datamuse API"""
     response = requests.get(f"https://api.datamuse.com/words?rel_rhy={word}&max=5")
     if response.status_code == 200:
         data = response.json()
         return [item['word'] for item in data]
     return []
 
-
 @app.route('/')
 def index():
     return send_file('index.html')
-
 
 @app.route('/verify', methods=['POST'])
 def verify():
@@ -89,18 +87,22 @@ def verify():
         expected_stress = data['expectedStress']
         refrain = data['refrain'].strip()
 
+        # First, analyze the refrain
+        refrain_words = re.findall(r"\w+(?:'\w+)?|\S+", refrain)
+        refrain_syllables = 0
+        for word in refrain_words:
+            syllables, _ = get_syllables_and_stress(word)
+            refrain_syllables += syllables
+
+        # Now analyze the full hemistich
         total_syllables = 0
         full_stress_pattern = ''
         details = []
         rhyming_words = []
 
-        # Get the number of syllables in the refrain
-        refrain_syllables, _ = get_syllables_and_stress(refrain)
-
+        # Process each word in the input text
         for word in words:
             syllables, stress_pattern = get_syllables_and_stress(word)
-            if syllables == 1:
-                stress_pattern = '0'
             total_syllables += syllables
             full_stress_pattern += stress_pattern
             details.append({
@@ -109,15 +111,26 @@ def verify():
                 "stress": stress_pattern
             })
 
+        # Find the rhyming word before the refrain
+        if refrain_syllables > 0:
+            # Find where the refrain words start
+            refrain_words_set = set(refrain_words)
+            
+            # Go backwards through the words until we find the first word that's not in the refrain
+            rhyming_word_index = -1
+            for i in range(len(words) - 1, -1, -1):
+                if words[i] not in refrain_words_set:
+                    rhyming_word_index = i
+                    break
+            
+            # Get rhyming words for the identified word
+            if rhyming_word_index >= 0:
+                rhyming_word = words[rhyming_word_index]
+                print(f"Finding rhyming words for: {rhyming_word}")  # Added console logging
+                rhyming_words = get_rhyming_words(rhyming_word)
+
         syllables_correct = total_syllables == expected_syllables
         stress_correct = full_stress_pattern == expected_stress
-
-        # Find the rhyming words
-        if refrain_syllables > 0:
-            rhyming_word_index = total_syllables - refrain_syllables
-            if rhyming_word_index >= 0 and rhyming_word_index < len(words):
-                rhyming_word = words[rhyming_word_index]
-                rhyming_words = get_rhyming_words(rhyming_word, refrain_syllables)
 
         return jsonify({
             "totalSyllables": total_syllables,
@@ -125,7 +138,8 @@ def verify():
             "details": details,
             "syllablesCorrect": syllables_correct,
             "stressCorrect": stress_correct,
-            "rhymingWords": rhyming_words
+            "rhymingWords": rhyming_words,
+            "refrainSyllables": refrain_syllables
         })
 
     except Exception as e:
