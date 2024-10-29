@@ -78,10 +78,13 @@
             <input type="number" id="syllables" min="1" required>
             <label for="stress">Expected stress pattern (e.g., 1010 for strong-weak-strong-weak):</label>
             <input type="text" id="stress" required pattern="[01]+" title="Enter a pattern of 0s and 1s">
+            <label for="refrain">Refrain:</label>
+            <input type="text" id="refrain" required>
             <button type="submit">Verify</button>
         </form>
         <div id="loading">Verifying...</div>
         <div id="result"></div>
+        <div id="rhyming-words"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
@@ -89,53 +92,61 @@
         const form = document.getElementById('verifierForm');
         const resultDiv = document.getElementById('result');
         const loadingDiv = document.getElementById('loading');
+        const rhymingWordsDiv = document.getElementById('rhyming-words');
 
         form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const input = document.getElementById('input').value.trim();
-    const expectedSyllables = parseInt(document.getElementById('syllables').value);
-    const expectedStress = document.getElementById('stress').value;
+            e.preventDefault();
+            const input = document.getElementById('input').value.trim();
+            const expectedSyllables = parseInt(document.getElementById('syllables').value);
+            const expectedStress = document.getElementById('stress').value;
+            const refrain = document.getElementById('refrain').value.trim();
 
-    resultDiv.innerHTML = '';
-    resultDiv.className = '';
-    loadingDiv.style.display = 'block';
+            resultDiv.innerHTML = '';
+            resultDiv.className = '';
+            rhymingWordsDiv.innerHTML = '';
+            loadingDiv.style.display = 'block';
 
-    try {
-        const response = await axios.post('/verify', {
-            input: input,
-            expectedSyllables: expectedSyllables,
-            expectedStress: expectedStress
-        });
+            try {
+                const response = await axios.post('/verify', {
+                    input: input,
+                    expectedSyllables: expectedSyllables,
+                    expectedStress: expectedStress,
+                    refrain: refrain
+                });
 
-        const { totalSyllables, fullStressPattern, details, syllablesCorrect, stressCorrect } = response.data;
+                const { totalSyllables, fullStressPattern, details, syllablesCorrect, stressCorrect, rhymingWords } = response.data;
 
-        loadingDiv.style.display = 'none';
+                loadingDiv.style.display = 'none';
 
-        let message = '';
-        if (syllablesCorrect) {
-            message += `✅ Syllable count correct: ${totalSyllables}`;
-        } else {
-            message += `❌ Syllable count incorrect: expected ${expectedSyllables}, got ${totalSyllables}`;
-        }
+                let message = '';
+                if (syllablesCorrect) {
+                    message += `✅ Syllable count correct: ${totalSyllables}`;
+                } else {
+                    message += `❌ Syllable count incorrect: expected ${expectedSyllables}, got ${totalSyllables}`;
+                }
 
-        message += '<br>';
+                message += '<br>';
 
-        if (stressCorrect) {
-            message += `✅ Stress pattern correct: ${fullStressPattern}`;
-        } else {
-            message += `❌ Stress pattern incorrect: expected ${expectedStress}, got ${fullStressPattern}`;
-        }
+                if (stressCorrect) {
+                    message += `✅ Stress pattern correct: ${fullStressPattern}`;
+                } else {
+                    message += `❌ Stress pattern incorrect: expected ${expectedStress}, got ${fullStressPattern}`;
+                }
 
-        message += '<br><br>Details:<br>' + details.map(d => `"${d.word}": ${d.syllables} syllable(s), stress: ${d.stress}`).join('<br>');
+                message += '<br><br>Details:<br>' + details.map(d => `"${d.word}": ${d.syllables} syllable(s), stress: ${d.stress}`).join('<br>');
 
-        resultDiv.innerHTML = message;
-        resultDiv.className = syllablesCorrect && stressCorrect ? 'success' : 'error';
-    } catch (error) {
-        loadingDiv.style.display = 'none';
-        const errorMessage = error.response?.data?.error || error.message;
-        resultDiv.innerHTML = `Error: ${errorMessage}`;
-        resultDiv.className = 'error';
-    }
+                resultDiv.innerHTML = message;
+                resultDiv.className = syllablesCorrect && stressCorrect ? 'success' : 'error';
+
+                if (rhymingWords.length > 0) {
+                    rhymingWordsDiv.innerHTML = '<h3>Rhyming Words:</h3>' + rhymingWords.join(', ');
+                }
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                const errorMessage = error.response?.data?.error || error.message;
+                resultDiv.innerHTML = `Error: ${errorMessage}`;
+                resultDiv.className = 'error';
+            }
         });
     </script>
 </body>
