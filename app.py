@@ -7,8 +7,15 @@ import re
 app = Flask(__name__)
 CORS(app)
 
+def clean_text(text):
+    text = re.sub(r'([a-zA-Z0-9])([.,!?;:])', r'\1 \2', text)
+    text = re.sub(r'([.,!?;:])([a-zA-Z0-9])', r'\1 \2', text)
+    return text
+
 def count_syllables_heuristic(word):
     word = ''.join(c for c in word.lower() if c.isalnum())
+    if not word:
+        return 0
     count = 0
     vowels = 'aeiouy'
     if word[0] in vowels:
@@ -25,7 +32,11 @@ def count_syllables_heuristic(word):
     return count
 
 def get_syllables_and_stress(word):
+    if not any(c.isalnum() for c in word):
+        return 0, ""
     word = ''.join(c for c in word if c.isalnum())
+    if not word:
+        return 0, ""
     if "'" in word:
         parts = word.split("'")
         total_syllables = 0
@@ -55,23 +66,28 @@ def get_syllables_and_stress(word):
         if syllables is None:
             syllables = count_syllables_heuristic(word)
 
-    # Ensure that monosyllabic words have 0 stress
     if syllables == 1:
         stress_pattern = '0'
     elif stress_pattern is None:
-        # Default pattern for multisyllabic words without pronunciation info
         stress_pattern = ''.join(['01'] * (syllables // 2) + ['1'] * (syllables % 2))
 
     return syllables, stress_pattern
 
-
 def get_rhyming_words(word):
-    """Get rhyming words using the Datamuse API"""
+    word = ''.join(c for c in word if c.isalnum())
+    if not word:
+        return []
     response = requests.get(f"https://api.datamuse.com/words?rel_rhy={word}&max=5")
     if response.status_code == 200:
         data = response.json()
         return [item['word'] for item in data]
     return []
+
+def check_refrain_at_end(input_text, refrain):
+    """Check if the refrain appears at the end of the input text."""
+    input_text = input_text.strip()
+    refrain = refrain.strip()
+    return input_text.endswith(refrain)
 
 @app.route('/')
 def index():
@@ -81,26 +97,26 @@ def index():
 def verify():
     try:
         data = request.json
-        input_text = data['input'].strip()
-        words = re.findall(r"\w+(?:'\w+)?|\S+", input_text)
+        input_text = clean_text(data['input'].strip())
+        words = re.findall(r"\S+", input_text)
         expected_syllables = data['expectedSyllables']
         expected_stress = data['expectedStress']
-        refrain = data['refrain'].strip()
+        refrain = clean_text(data['refrain'].strip())
 
-        # First, analyze the refrain
-        refrain_words = re.findall(r"\w+(?:'\w+)?|\S+", refrain)
+        # Check if refrain exists at the end of input
+        refrain_exists = check_refrain_at_end(input_text, refrain)
+        
+        refrain_words = re.findall(r"\S+", refrain)
         refrain_syllables = 0
         for word in refrain_words:
             syllables, _ = get_syllables_and_stress(word)
             refrain_syllables += syllables
 
-        # Now analyze the full hemistich
         total_syllables = 0
         full_stress_pattern = ''
         details = []
         rhyming_words = []
 
-        # Process each word in the input text
         for word in words:
             syllables, stress_pattern = get_syllables_and_stress(word)
             total_syllables += syllables
@@ -111,23 +127,13 @@ def verify():
                 "stress": stress_pattern
             })
 
-        # Find the rhyming word before the refrain
-        if refrain_syllables > 0:
-            # Find where the refrain words start
-            refrain_words_set = set(refrain_words)
-            
-            # Go backwards through the words until we find the first word that's not in the refrain
-            rhyming_word_index = -1
-            for i in range(len(words) - 1, -1, -1):
-                if words[i] not in refrain_words_set:
-                    rhyming_word_index = i
-                    break
-            
-            # Get rhyming words for the identified word
-            if rhyming_word_index >= 0:
-                rhyming_word = words[rhyming_word_index]
-                print(f"Finding rhyming words for: {rhyming_word}")  # Added console logging
-                rhyming_words = get_rhyming_words(rhyming_word)
+        if refrain_syllables > 0 and refrain_exists:
+            # Find the word before refrain
+            input_without_refrain = input_text[:-(len(refrain))].strip()
+            words_before_refrain = re.findall(r"\S+", input_without_refrain)
+            if words_before_refrain:
+                last_word_before_refrain = words_before_refrain[-1]
+                rhyming_words = get_rhyming_words(last_word_before_refrain)
 
         syllables_correct = total_syllables == expected_syllables
         stress_correct = full_stress_pattern == expected_stress
@@ -139,7 +145,9 @@ def verify():
             "syllablesCorrect": syllables_correct,
             "stressCorrect": stress_correct,
             "rhymingWords": rhyming_words,
-            "refrainSyllables": refrain_syllables
+            "refrainSyllables": refrain_syllables,
+            "refrainExists": refrain_exists,
+            "refrainMessage": "Refrain must appear at the end of the text" if not refrain_exists else None
         })
 
     except Exception as e:
