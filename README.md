@@ -7,6 +7,8 @@
 - **Stress Pattern Analysis**: Match words' stress patterns in binary (e.g., `101`).
 
 ## Issues Faced
-- Handling words with **apostrophes** (e.g., *don’t*, *it’s*).
-- Estimating syllables for **non-English proper nouns**.
-- Ignoring **punctuation** while analyzing phrases.
+- ~~Handling words with **apostrophes** (e.g., *don’t*, *it’s*).~~
+- ~~Estimating syllables for **non-English proper nouns**.~~
+- ~~Ignoring **punctuation** while analyzing phrases.~~
+- Adding Multiple Couplets as input 
+- Inferring rhyme from the multiple couplets
