@@ -12,7 +12,19 @@ def clean_text(text):
     text = re.sub(r'([.,!?;:])([a-zA-Z0-9])', r'\1 \2', text)
     return text
 
+def strip_punctuation(text):
+    return re.sub(r'[.,!?;:]', '', text)
+
+def check_refrain_at_end(input_text, refrain):
+    input_text = input_text.strip()
+    refrain = refrain.strip()
+    clean_input = strip_punctuation(input_text)
+    clean_refrain = strip_punctuation(refrain)
+    return clean_input.endswith(clean_refrain)
+
 def count_syllables_heuristic(word):
+    if "'" in word:
+        return 2
     word = ''.join(c for c in word.lower() if c.isalnum())
     if not word:
         return 0
@@ -34,43 +46,33 @@ def count_syllables_heuristic(word):
 def get_syllables_and_stress(word):
     if not any(c.isalnum() for c in word):
         return 0, ""
+    if "'" in word:
+        return 2, "01"
     word = ''.join(c for c in word if c.isalnum())
     if not word:
         return 0, ""
-    if "'" in word:
-        parts = word.split("'")
-        total_syllables = 0
-        total_stress = ""
-        for part in parts:
-            syllables, stress = get_syllables_and_stress(part)
-            total_syllables += syllables
-            total_stress += stress
-        return total_syllables, total_stress
-
     response = requests.get(f"https://api.datamuse.com/words?sp={word}&md=s")
     if response.status_code == 200:
         data = response.json()
         if data and 's' in data[0]:
             syllables = int(data[0]['s'])
         else:
-            syllables = None
-
+            syllables = count_syllables_heuristic(word)
+    else:
+        syllables = count_syllables_heuristic(word)
     pronunciations = pronouncing.phones_for_word(word)
     if pronunciations:
         stresses = pronouncing.stresses(pronunciations[0])
         stress_pattern = ''.join('1' if s == '1' else '0' for s in stresses)
-        if syllables is None:
-            syllables = len(stresses)
     else:
-        stress_pattern = None
-        if syllables is None:
-            syllables = count_syllables_heuristic(word)
-
-    if syllables == 1:
-        stress_pattern = '0'
-    elif stress_pattern is None:
-        stress_pattern = ''.join(['01'] * (syllables // 2) + ['1'] * (syllables % 2))
-
+        if syllables == 1:
+            stress_pattern = '1'
+        elif syllables == 2:
+            stress_pattern = '01'
+        else:
+            stress_pattern = '0' + '10' * ((syllables - 1) // 2)
+            if syllables % 2 == 0:
+                stress_pattern += '1'
     return syllables, stress_pattern
 
 def get_rhyming_words(word):
@@ -82,12 +84,6 @@ def get_rhyming_words(word):
         data = response.json()
         return [item['word'] for item in data]
     return []
-
-def check_refrain_at_end(input_text, refrain):
-    """Check if the refrain appears at the end of the input text."""
-    input_text = input_text.strip()
-    refrain = refrain.strip()
-    return input_text.endswith(refrain)
 
 @app.route('/')
 def index():
@@ -103,10 +99,9 @@ def verify():
         expected_stress = data['expectedStress']
         refrain = clean_text(data['refrain'].strip())
 
-        # Check if refrain exists at the end of input
         refrain_exists = check_refrain_at_end(input_text, refrain)
         
-        refrain_words = re.findall(r"\S+", refrain)
+        refrain_words = re.findall(r"\S+", strip_punctuation(refrain))
         refrain_syllables = 0
         for word in refrain_words:
             syllables, _ = get_syllables_and_stress(word)
@@ -128,8 +123,7 @@ def verify():
             })
 
         if refrain_syllables > 0 and refrain_exists:
-            # Find the word before refrain
-            input_without_refrain = input_text[:-(len(refrain))].strip()
+            input_without_refrain = strip_punctuation(input_text[:-(len(strip_punctuation(refrain)))]).strip()
             words_before_refrain = re.findall(r"\S+", input_without_refrain)
             if words_before_refrain:
                 last_word_before_refrain = words_before_refrain[-1]
